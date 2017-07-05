@@ -26,7 +26,7 @@
         session (-> {:contact-points cluster
                      :query-options {:consistency :quorum}}
                     (cond-> (and username password)
-                      (assoc :credentials {:username username
+                      (assoc :credentials {:user username
                                            :password password}))
                     (alia/cluster)
                     (alia/connect))]
