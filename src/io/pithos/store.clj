@@ -23,7 +23,8 @@
                     {:replication {:class              "SimpleStrategy"
                                    :replication_factor (or repfactor 1)}})
         cluster (if (sequential? cluster) cluster [cluster])
-        session (-> (assoc cassandra-options :contact-points cluster)
+        session (-> (assoc cassandra-options :contact-points cluster
+                                             :ssl? true)
                     (cond-> (and username password)
                       (assoc :credentials {:user     username
                                            :password password}))
