@@ -17,14 +17,15 @@
 (defn cassandra-store
   "Connect to a cassandra cluster, and use a specific keyspace.
    When the keyspace is not found, try creating it"
-  [{:keys [cassandra-options cluster keyspace hints repfactor username password ssl ssl-options] :as config}]
+  [{:keys [cassandra-options cluster keyspace hints repfactor username password tls tls-options] :as config}]
   (debug "building cassandra store for: " cluster keyspace hints)
   (let [hints   (or hints
                     {:replication {:class              "SimpleStrategy"
                                    :replication_factor (or repfactor 1)}})
         cluster (if (sequential? cluster) cluster [cluster])
-        ssl (or ssl false)
-        ssl-options (or ssl-options
+        tls (or tls false)
+        tls-options (or tls-options
+                        ;; List of Mozilla's recommended suites for TLSv1.2(maximum support in Java 8)
                         {:cipher-suites ["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256" "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256" "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384" "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384" "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256" "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"]
                          :keystore-path (str (. (. System getProperties) (get "java.home")) "/lib/security/cacerts")
                          :keystore-password "changeit"})
@@ -32,8 +33,8 @@
                     (cond-> (and username password)
                       (assoc :credentials {:user     username
                                            :password password})
-                      (true? ssl) (assoc :ssl-options ssl-options))
-                    (assoc :ssl? ssl)
+                      (true? tls) (assoc :ssl-options tls-options))
+                    (assoc :ssl? tls)
                     (alia/cluster)
                     (alia/connect))]
     (try (alia/execute session (use-keyspace keyspace))
