@@ -17,17 +17,23 @@
 (defn cassandra-store
   "Connect to a cassandra cluster, and use a specific keyspace.
    When the keyspace is not found, try creating it"
-  [{:keys [cassandra-options cluster keyspace hints repfactor username password]}]
+  [{:keys [cassandra-options cluster keyspace hints repfactor username password ssl ssl-options] :as config}]
   (debug "building cassandra store for: " cluster keyspace hints)
   (let [hints   (or hints
                     {:replication {:class              "SimpleStrategy"
                                    :replication_factor (or repfactor 1)}})
         cluster (if (sequential? cluster) cluster [cluster])
-        session (-> (assoc cassandra-options :contact-points cluster
-                                             :ssl? true)
+        ssl (or ssl false)
+        ssl-options (or ssl-options
+                        {:cipher-suites ["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256" "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256" "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384" "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384" "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256" "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"]
+                         :keystore-path (str (. (. System getProperties) (get "java.home")) "/lib/security/cacerts")
+                         :keystore-password "changeit"})
+        session (-> (assoc cassandra-options :contact-points cluster)
                     (cond-> (and username password)
                       (assoc :credentials {:user     username
-                                           :password password}))
+                                           :password password})
+                      (true? ssl) (assoc :ssl-options ssl-options))
+                    (assoc :ssl? ssl)
                     (alia/cluster)
                     (alia/connect))]
     (try (alia/execute session (use-keyspace keyspace))
