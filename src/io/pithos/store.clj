@@ -18,7 +18,7 @@
 (defn cassandra-store
   "Connect to a cassandra cluster, and use a specific keyspace.
    When the keyspace is not found, try creating it"
-  [{:keys [cassandra-options cluster keyspace hints repfactor username password tls tls-options] :as config}]
+  [{:keys [cassandra-options cluster keyspace hints repfactor username password tls tls-options socket-options pooling] :as config}]
   (debug "building cassandra store for: " cluster keyspace hints)
   (let [hints   (or hints
                     {:replication {:class              "SimpleStrategy"
@@ -31,12 +31,25 @@
                         {:cipher-suites ["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256" "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256" "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384" "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384" "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256" "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"]
                          :keystore-path (-> (io/file (. (. System getProperties) (get "java.home")) "lib" "security" "cacerts") (.getPath))
                          :keystore-password "changeit"})
+        socket-options (or socket-options
+                           ;; Default options for datastacks Java driver.
+                           ;; https://docs.datastax.com/en/drivers/java/3.1/com/datastax/driver/core/SocketOptions.html#DEFAULT_CONNECT_TIMEOUT_MILLIS
+                           {:connect-timeout-millis 5000
+                            :read-timeout-millis 12000})
+        pooling (or pooling
+                    ;; Default values for pooling option supported by alia 3.3.0
+                    ;; https://docs.datastax.com/en/drivers/java/3.1/com/datastax/driver/core/PoolingOptions.html#setCoreConnectionsPerHost-com.datastax.driver.core.HostDistance-int-
+                    {:core-connections-per-host {:local 1 :remote 1}
+                     :max-connections-per-host {:local 1 :remote 1}
+                     :connection-thresholds {:local 800 :remote 200}})
         session (-> (assoc cassandra-options :contact-points cluster)
                     (cond-> (and username password)
                       (assoc :credentials {:user     username
                                            :password password})
                       (true? tls) (assoc :ssl-options tls-options))
                     (assoc :ssl? tls)
+                    (assoc :socket-options socket-options)
+                    (assoc :pooling-options pooling)
                     (alia/cluster)
                     (alia/connect))]
     (try (alia/execute session (use-keyspace keyspace))
